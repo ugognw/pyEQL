@@ -1275,7 +1275,7 @@ class Solution(MSONable):
             if mw is None:
                 raise ValueError(f"Molecular weight for solvent {self.solvent} not found in database. Cannot proceed.")
             target_mol = target_mass.to("g") / mw.to("g/mol")
-            self.components[self.solvent] = target_mol.magnitude
+            self.components[self.solvent] = float(target_mol.magnitude)
 
         else:
             # add the new solute
@@ -1387,7 +1387,7 @@ class Solution(MSONable):
             target_mass = target_vol * ureg.Quantity(self.water_substance.rho, "g/L")
             mw = self.get_property(self.solvent, "molecular_weight")
             target_mol = target_mass / mw
-            self.components[self.solvent] = target_mol.to("mol").magnitude
+            self.components[self.solvent] = float(target_mol.to("mol").magnitude)
 
         else:
             # change the amount of the solute present
@@ -2343,12 +2343,12 @@ class Solution(MSONable):
                     ]
                 )
                 self.set_amount("H+", f"{new_hplus} mol/L")
-                self.set_amount("OH-", f"{K_W/new_hplus} mol/L")
+                self.set_amount("OH-", f"{K_W / new_hplus} mol/L")
                 return
 
             z = self.get_property(self._cb_species, "charge")
             try:
-                self.add_amount(self._cb_species, f"{-1*cb/z} mol")
+                self.add_amount(self._cb_species, f"{-1 * cb / z} mol")
                 return
             except ValueError:
                 # if the concentration is negative, it must mean there is not enough present.
@@ -2585,7 +2585,7 @@ class Solution(MSONable):
         for sol2, amt2 in other.components.items():
             if mix_species.get(sol2):
                 orig_amt = float(mix_species[sol2].split(" ")[0])
-                mix_species[sol2] = f"{orig_amt+amt2} mol"
+                mix_species[sol2] = f"{orig_amt + amt2} mol"
             else:
                 mix_species.update({sol2: f"{amt2} mol"})
 

@@ -28,25 +28,31 @@ pip install pyEQL
 
 ### Create a Solution
 
-```python
->>> from pyEQL import Solution
->>> s1 = Solution({'Na+':'0.5 mol/kg', 'Cl-': '0.5 mol/kg'},
-                         pH=8,
-                         temperature = '20 degC',
-                         volume='8 L')
+```{eval-rst}
+.. doctest::
+
+   >>> from pyEQL import Solution
+   >>> s1 = Solution({'Na+':'0.5 mol/kg', 'Cl-': '0.5 mol/kg'},
+   ...                      pH=8,
+   ...                      temperature = '20 degC',
+   ...                      volume='8 L')
+   >>> s1
+   <pyEQL.solution.Solution object at ...>
+
 ```
 
 ### Get properties
 
 ```python
 >>> s1.density
-<Quantity(1.03710384, 'kilogram / liter')>
+<Quantity(1.01830..., 'kilogram / liter')>
 >>> s1.conductivity
-<Quantity(8.09523295, 'siemens / meter')>
+<Quantity(4.17695..., 'siemens / meter')>
 >>> s1.osmotic_pressure.to('atm')
-<Quantity(46.7798197, 'standard_atmosphere')>
+<Quantity(22.17445..., 'standard_atmosphere')>
 >>> s1.get_amount('Na+', 'ug/L')
-<Quantity(22989769.3, 'microgram / liter')>
+<Quantity(11372980.14638..., 'microgram / liter')>
+
 ```
 
 ## Key Features

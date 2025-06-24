@@ -43,15 +43,17 @@ pip install pyEQL
 
 ### Get properties
 
-```python
->>> s1.density
-<Quantity(1.01830..., 'kilogram / liter')>
->>> s1.conductivity
-<Quantity(4.17695..., 'siemens / meter')>
->>> s1.osmotic_pressure.to('atm')
-<Quantity(22.17445..., 'standard_atmosphere')>
->>> s1.get_amount('Na+', 'ug/L')
-<Quantity(11372980.14638..., 'microgram / liter')>
+```{eval-rst}
+.. doctest::
+
+   >>> s1.density
+   <Quantity(1.01830..., 'kilogram / liter')>
+   >>> s1.conductivity
+   <Quantity(4.17695..., 'siemens / meter')>
+   >>> s1.osmotic_pressure.to('atm')
+   <Quantity(22.17445..., 'standard_atmosphere')>
+   >>> s1.get_amount('Na+', 'ug/L')
+   <Quantity(11372980.14638..., 'microgram / liter')>
 
 ```
 

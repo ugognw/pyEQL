@@ -274,7 +274,6 @@ class TestSaltDictTypes:
         assert all(salt_values_are_salts)
 
 
-@pytest.mark.usefixtures("salt_dict")
 class TestGetSaltDict:
     @staticmethod
     def test_should_match_equimolar_ion_equivalents(
@@ -408,7 +407,6 @@ class TestGetSaltDictMultipleSalts(TestGetSaltDict):
         assert minor_salt.formula not in salt_dict
 
     @staticmethod
-    # This combination of
     @pytest.mark.parametrize(("cation_scale", "salt_ratio", "cutoff"), [(0.9, 1.0, 0.0)])
     @pytest.mark.parametrize("salts", [[Salt(c, a) for c, a in zip(_CATIONS, _ANIONS, strict=True)]])
     def test_should_order_salts_by_amount(salt_dict: dict[str, dict[str, float | Salt]]) -> None:

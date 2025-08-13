@@ -1498,7 +1498,7 @@ class Solution(MSONable):
             return None
 
     # TODO - modify? deprecate? make a salts property?
-    def get_salt_dict(self, cutoff: float = 1e-6, use_totals: bool = True) -> dict[str, dict[str, float | Salt]]:
+    def get_salt_dict(self, cutoff: float = 1e-10, use_totals: bool = True) -> dict[str, dict[str, float | Salt]]:
         """
         Returns a dict that represents the salts of the Solution by pairing anions and cations.
 
@@ -1509,7 +1509,7 @@ class Solution(MSONable):
 
         Args:
             cutoff: Lowest molal concentration to consider. No salts below this value will be included in the output.
-                Useful for excluding analysis of trace anions. Defaults to 1e-6 (1 part per million).
+                Useful for excluding analysis of trace anions. Defaults to 1e-10 (1 part per 10 billion).
             use_totals: Whether or not to base the analysis on the concentration of the predominant species of each
                 element. Note that species in which a given element assumes a different oxidation state are always
                 treated separately.

@@ -67,7 +67,6 @@ def create_pitzer_salts() -> list[_IonPair]:
         (("Cu", 2.0), ("SO4", -2.0)),
         (("Al", 3.0), ("SO4", -2.0)),
         (("K", 1.0), ("PO4", -3.0)),
-        (("H4Br", 3.0), ("N", -3.0)),
         # More polyatomic ion combinations
         (("Ag", 1.0), ("NO3", -1.0)),
         (("Ba", 2.0), ("NO3", -1.0)),

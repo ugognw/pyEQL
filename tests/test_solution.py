@@ -854,7 +854,7 @@ class TestLinearCombinationSoluteVolume:
     @staticmethod
     @pytest.fixture(name="expected_solute_volume")
     def fixture_expected_solute_volume(
-        ionic_strength: float,
+        solution: Solution,
         conc: Quantity,
         alphas: tuple[float, float],
         param: dict[str, dict[str, Quantity]],
@@ -862,7 +862,7 @@ class TestLinearCombinationSoluteVolume:
         temp: str,
     ) -> float:
         return ac.get_apparent_volume_pitzer(  # type: ignore[no-any-return, no-untyped-call]
-            ionic_strength,
+            solution.ionic_strength,
             conc,
             alphas[0],
             alphas[1],

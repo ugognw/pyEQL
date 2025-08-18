@@ -45,18 +45,18 @@ def fixture_salt_dict(solution: Solution, cutoff: float, use_totals: bool) -> di
 
 
 @pytest.fixture(name="expected_cation_nu")
-def fixture_expected_cation_nu(cation: tuple[str, int], anion: tuple[str, int]) -> int:
-    return 1 if cation[1] == anion[1] else -anion[1]
+def fixture_expected_cation_nu(cation: tuple[str, float], anion: tuple[str, float]) -> float:
+    return 1.0 if cation[1] == anion[1] else -anion[1]
 
 
 @pytest.fixture(name="expected_anion_nu")
-def fixture_expected_anion_nu(cation: tuple[str, int], anion: tuple[str, int]) -> int:
-    return 1 if anion[1] == cation[1] else cation[1]
+def fixture_expected_anion_nu(cation: tuple[str, float], anion: tuple[str, float]) -> float:
+    return 1.0 if anion[1] == cation[1] else cation[1]
 
 
 @pytest.fixture(name="expected_formula")
 def fixture_expected_formula(
-    cation: tuple[str, int], expected_cation_nu: int, anion: tuple[str, int], expected_anion_nu: int
+    cation: tuple[str, float], expected_cation_nu: float, anion: tuple[str, float], expected_anion_nu: float
 ) -> str:
     cation_part = cation[0] if expected_cation_nu == 1 else f"({cation}){expected_cation_nu}"
     anion_part = anion[0] if expected_anion_nu == 1 else f"({anion}){expected_anion_nu}"
@@ -71,27 +71,27 @@ class TestSaltInit:
         assert salt.formula == expected_formula
 
     @staticmethod
-    def test_should_detect_cation(salt: Salt, cation: tuple[str, int]) -> None:
+    def test_should_detect_cation(salt: Salt, cation: tuple[str, float]) -> None:
         assert cation[0] in salt.cation
 
     @staticmethod
-    def test_should_detect_anion(salt: Salt, anion: tuple[str, int]) -> None:
+    def test_should_detect_anion(salt: Salt, anion: tuple[str, float]) -> None:
         assert anion[0] in salt.anion
 
     @staticmethod
-    def test_should_detect_cation_charge(salt: Salt, cation: tuple[str, int]) -> None:
+    def test_should_detect_cation_charge(salt: Salt, cation: tuple[str, float]) -> None:
         assert salt.z_cation == cation[1]
 
     @staticmethod
-    def test_should_detect_anion_charge(salt: Salt, anion: tuple[str, int]) -> None:
+    def test_should_detect_anion_charge(salt: Salt, anion: tuple[str, float]) -> None:
         assert salt.z_anion == anion[1]
 
     @staticmethod
-    def test_should_compute_stoichiometric_coefficient_for_cation(salt: Salt, expected_cation_nu: int) -> None:
+    def test_should_compute_stoichiometric_coefficient_for_cation(salt: Salt, expected_cation_nu: float) -> None:
         assert salt.nu_cation == expected_cation_nu
 
     @staticmethod
-    def test_should_compute_stoichiometric_coefficient_for_anion(salt: Salt, expected_anion_nu: int) -> None:
+    def test_should_compute_stoichiometric_coefficient_for_anion(salt: Salt, expected_anion_nu: float) -> None:
         assert salt.nu_anion == expected_anion_nu
 
 

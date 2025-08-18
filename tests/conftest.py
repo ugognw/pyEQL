@@ -1,3 +1,37 @@
+"""
+Test Suite Reference
+====================
+
+This description summarizes the organization of pytest fixtures for the test suite.
+
+Solution compositions are ultimately controlled by the output of the `salts` fixture. The `salts` fixture is
+parametrized in two ways. The `ion_pair` fixture enables parametrization over specific single salt compositions.
+As described by the `_IonPair` type alias, this fixture returns a 2-tuple. Each element in the 2-tuple is a 2-tuple
+whose elements (str, float) describe the ion's formula and charge, respectively. This fixture is then used to
+parametrize the `salts` fixture. The `ion_pairs` fixture facilitates parametrization over specific
+combinations of ion pairs (e.g., an ion and its conjugate acid/base).
+
+Special parametrizations of the `ion_pair` and and `ion_pairs` fixtures can be requested for test classes by
+setting the `parametrizations` class attribute to a dictionary mapping the fixture name to any number of the following
+strings. (This is implemented in `pytest_generate_tests()` below.)
+
+- "basic": This requests a parametrization that includes ion pairs which represent all combinations of
+  mono/di/trivalent ions, including monoatomic and polyatomic ions.
+- "pitzer": This requests a parametrization that includes ion pairs which represent *nearly* all
+  combinations of mono/di/trivalent ions for which Pitzer activity and molar volume parameters exist.
+
+Solution compositions can be further controlled using the floats corresponding to the
+`salt_conc`, `cation_scale`, `anion_scale`, and `salt_ratio` fixtures.
+
+- `salt_conc`: determines the *base* concentration of salts; if `cation_scale = anion_scale = salt_ratio = 1.0`, then
+  the concentration of each ion will be that resulting from dissolving a concentration of the salt equal to `salt_conc`.
+- `cation_scale`/`anion_scale`: a factor with which to scale the concentration of the cation/anion in a salt relative
+  to `salt_conc`. This is applied to each pair of ions in `salts`. If `cation_scale = 0.0`/`anion_scale = 0.0`, then
+  only the anions/cations are added to `solution`.
+- `salt_ratio`: This is the ratio of the concentration of any given Salt in `salts` relative to the previous Salt in
+  the list. Note that if this value is 0.0, then no more than one Salt is added to `solution`.
+"""
+
 from collections.abc import Iterable
 from itertools import combinations, product
 from typing import Any, Literal

@@ -1,25 +1,98 @@
+from collections.abc import Iterable
 from itertools import combinations, product
-from typing import Literal
+from typing import Any, Literal
 
 import pytest
 
-import pyEQL
 from pyEQL.engines import EOS
 from pyEQL.salt_ion_match import Salt
+from pyEQL.solution import Solution
+from pyEQL.utils import standardize_formula
 
-_CATIONS = ["Na[+1]", "Ca[+2]", "Fe[+3]", "K[+1]", "Li[+1]", "Cu[+2]", "Ba[+2]"]
-_ANIONS = ["Cl[-1]", "SO4[-2]", "PO4[-3]", "ClO[-1]", "NO3[-1]", "CO3[-2]", "MnO4[-2]"]
-_SALTS = list(product(_CATIONS[:3], _ANIONS[:3]))
-_ACIDS = [("H[+1]", anion) for anion in _ANIONS[:3]]
-_BASES = [(cation, "OH[-1]") for cation in _CATIONS[:3]]
-_SOLUTES = [*_SALTS, *_ACIDS, *_BASES]
-_SOLUTES_LITE = [*product(_CATIONS[:2], _ANIONS[1:3]), _ACIDS[0], _BASES[-1]]
+# cation (formula, charge), anion (formula, charge)
+_IonPair = tuple[tuple[str, float], tuple[str, float]]
 
 
-@pytest.fixture(name="salt", params=_SOLUTES)
-def fixture_salt(request: pytest.FixtureRequest) -> Salt:
-    cation, anion = request.param
-    return Salt(cation=cation, anion=anion)
+def create_general_salts() -> list[_IonPair]:
+    anions = [("Cl", -1.0), ("SO4", -2.0), ("PO4", -3.0), ("Fe(CN)6", -3.0), ("H3(CO)2", -1.0)]
+    cations = [("Na", 1.0), ("Ca", 2.0), ("Fe", 3.0), ("H4Br", 3.0), ("NH4", 1.0)]
+    salts = list(product(cations, anions))
+    salts += [(("H", 1.0), anion) for anion in anions[:3]]
+    salts += [(cation, ("OH", -1.0)) for cation in cations[:3]]
+
+    return salts
+
+
+def create_pitzer_salts() -> list[_IonPair]:
+    return [
+        # One pair for each combination of mono/di/trivalent ions (data permitting)
+        (("Na", 1.0), ("Cl", -1.0)),
+        (("Co", 2.0), ("Cl", -1.0)),
+        (("Fe", 3.0), ("Cl", -1.0)),
+        (("K", 1.0), ("SO4", -2.0)),
+        (("Cu", 2.0), ("SO4", -2.0)),
+        (("Al", 3.0), ("SO4", -2.0)),
+        (("K", 1.0), ("PO4", -3.0)),
+        (("H4Br", 3.0), ("N", -3.0)),
+        # More polyatomic ion combinations
+        (("Ag", 1.0), ("NO3", -1.0)),
+        (("Ba", 2.0), ("NO3", -1.0)),
+        (("NH4", 1.0), ("Cl", -1.0)),
+        (("NH4", 1.0), ("NO3", -1.0)),
+        (("NH4", 1.0), ("SO4", -2.0)),
+        # H+ and OH- containing pairs
+        (("Na", 1.0), ("OH", -1.0)),
+        (("H", 1.0), ("Cl", -1.0)),
+        (("H", 1.0), ("NO3", -1.0)),
+        # Miscellaneous salts in database
+        (("K", 1.0), ("H3(CO)2", -1.0)),
+        (("Mg", 2.0), ("H6(CO)4", -2.0)),
+    ]
+
+
+_ION_PAIRS = create_general_salts()
+_PITZER_ION_PAIRS = create_pitzer_salts()
+_TEST_SCENARIOS: dict[str, dict[str, Iterable[Any]]] = {
+    "ion_pair": {"basic": _ION_PAIRS, "pitzer": _PITZER_ION_PAIRS},
+    "ion_pairs": {"basic": combinations(_ION_PAIRS[:3], r=2), "pitzer": combinations(_PITZER_ION_PAIRS[:3], r=2)},
+}
+
+
+# Implement class-based parametrization scenarios
+def pytest_generate_tests(metafunc: pytest.Metafunc) -> None:
+    if not hasattr(metafunc.cls, "parametrizations"):
+        return
+
+    for fixture, parametrizations in metafunc.cls.parametrizations.items():
+        for parametrization in parametrizations:
+            argvalues = _TEST_SCENARIOS[fixture][parametrization]
+            ids = [repr(x) for x in argvalues]
+            metafunc.parametrize(fixture, argvalues, ids=ids)
+
+
+@pytest.fixture(name="ion_pair")
+def fixture_ion_pair() -> _IonPair:
+    return (("H", 1.0), ("OH", -1.0))
+
+
+@pytest.fixture(name="cation")
+def fixture_cation(ion_pair: _IonPair) -> tuple[str, float]:
+    cation, _ = ion_pair
+    return cation
+
+
+@pytest.fixture(name="anion")
+def fixture_anion(ion_pair: _IonPair) -> tuple[str, float]:
+    _, anion = ion_pair
+    return anion
+
+
+@pytest.fixture(name="salt")
+def fixture_salt(cation: tuple[str, float], anion: tuple[str, float]) -> Salt:
+    return Salt(
+        cation=standardize_formula(f"{cation[0]}[{cation[1]}]"),
+        anion=standardize_formula(f"{anion[0]}[{anion[1]}]"),
+    )
 
 
 @pytest.fixture(name="salts")
@@ -86,17 +159,10 @@ def fixture_solutes(
 
 # This is an alternative way to parametrize the solution fixture
 # This fixture is preferred if specific pairs of solutes are required (e.g., salts of a conjugate acid/base pair)
-@pytest.fixture(
-    name="solute_pairs",
-    params=[
-        (s1, s2)
-        for s1, s2 in combinations(_SOLUTES_LITE, r=2)
-        if "H[+1]" not in (s1[0], s2[0]) and "OH[-1]" not in (s1[1] and s2[1])
-    ],
-)
-def fixture_solute_pairs(request: pytest.FixtureRequest) -> tuple[tuple[str, str], tuple[str, str]]:
-    solute_pairs: tuple[tuple[str, str], tuple[str, str]] = request.param
-    return solute_pairs
+@pytest.fixture(name="ion_pairs", params=combinations(_ION_PAIRS[:3], r=2))
+def fixture_ion_pairs(request: pytest.FixtureRequest) -> tuple[tuple[str, str], tuple[str, str]]:
+    ion_pairs: tuple[tuple[str, str], tuple[str, str]] = request.param
+    return ion_pairs
 
 
 @pytest.fixture(name="volume", params=["1 L"])
@@ -132,8 +198,8 @@ def fixture_solution(
     solvent: str | list,
     engine: EOS | Literal["native", "ideal", "phreeqc"],
     database: str | None,
-) -> pyEQL.Solution:
-    return pyEQL.Solution(solutes=solutes, volume=volume, pH=pH, solvent=solvent, engine=engine, database=database)
+) -> Solution:
+    return Solution(solutes=solutes, volume=volume, pH=pH, solvent=solvent, engine=engine, database=database)
 
 
 # Model Parameters
@@ -141,9 +207,10 @@ def fixture_solution(
 
 # Pitzer activity/osmotic parameters
 @pytest.fixture(name="alphas")
-def fixture_alphas(salt: Salt) -> tuple[float, float]:
-    if salt.z_cation >= 2 and salt.z_anion <= -2:
-        if salt.z_cation >= 3 or salt.z_anion <= -3:
+def fixture_alphas(ion_pair: _IonPair) -> tuple[float, float]:
+    cation, anion = ion_pair
+    if cation[1] >= 2 and anion[1] <= -2:
+        if cation[1] >= 3 or anion[1] <= -3:
             alpha1 = 2.0
             alpha2 = 50.0
         else:

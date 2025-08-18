@@ -80,7 +80,7 @@ def create_pitzer_salts() -> list[_IonPair]:
         (("H", 1.0), ("NO3", -1.0)),
         # Miscellaneous salts in database
         (("K", 1.0), ("H3(CO)2", -1.0)),
-        (("Mg", 2.0), ("H6(CO)4", -2.0)),
+        (("Mg", 2.0), ("H3(CO)2", -1.0)),
     ]
 
 
@@ -98,6 +98,8 @@ def pytest_generate_tests(metafunc: pytest.Metafunc) -> None:
         return
 
     for fixture, parametrizations in metafunc.cls.parametrizations.items():
+        if fixture not in metafunc.fixturenames:
+            continue
         for parametrization in parametrizations:
             argvalues = _TEST_SCENARIOS[fixture][parametrization]
             ids = [repr(x) for x in argvalues]

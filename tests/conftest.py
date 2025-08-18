@@ -88,7 +88,10 @@ _ION_PAIRS = create_general_salts()
 _PITZER_ION_PAIRS = create_pitzer_salts()
 _TEST_SCENARIOS: dict[str, dict[str, Iterable[Any]]] = {
     "ion_pair": {"basic": _ION_PAIRS, "pitzer": _PITZER_ION_PAIRS},
-    "ion_pairs": {"basic": combinations(_ION_PAIRS[:3], r=2), "pitzer": combinations(_PITZER_ION_PAIRS[:3], r=2)},
+    "ion_pairs": {
+        "basic": list(combinations(_ION_PAIRS[:3], r=2)),
+        "pitzer": list(combinations(_PITZER_ION_PAIRS[:3], r=2)),
+    },
 }
 
 
@@ -100,10 +103,9 @@ def pytest_generate_tests(metafunc: pytest.Metafunc) -> None:
     for fixture, parametrizations in metafunc.cls.parametrizations.items():
         if fixture not in metafunc.fixturenames:
             continue
-        for parametrization in parametrizations:
-            argvalues = _TEST_SCENARIOS[fixture][parametrization]
-            ids = [repr(x) for x in argvalues]
-            metafunc.parametrize(fixture, argvalues, ids=ids)
+        argvalues = [val for p in parametrizations for val in _TEST_SCENARIOS[fixture][p]]
+        ids = [repr(x) for x in argvalues]
+        metafunc.parametrize(fixture, argvalues, ids=ids)
 
 
 @pytest.fixture(name="ion_pair")
@@ -195,10 +197,9 @@ def fixture_solutes(
 
 # This is an alternative way to parametrize the solution fixture
 # This fixture is preferred if specific pairs of solutes are required (e.g., salts of a conjugate acid/base pair)
-@pytest.fixture(name="ion_pairs", params=combinations(_ION_PAIRS[:3], r=2))
-def fixture_ion_pairs(request: pytest.FixtureRequest) -> tuple[tuple[str, str], tuple[str, str]]:
-    ion_pairs: tuple[tuple[str, str], tuple[str, str]] = request.param
-    return ion_pairs
+@pytest.fixture(name="ion_pairs")
+def fixture_ion_pairs() -> list[_IonPair]:
+    return [(("K", 1.0), ("Br", -1.0)), (("Na", 1.0), ("Cl", -1.0))]
 
 
 @pytest.fixture(name="volume", params=["1 L"])

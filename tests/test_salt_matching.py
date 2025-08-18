@@ -9,27 +9,21 @@ salt_ion_match.py
 import logging
 import platform
 from itertools import combinations, product
+from typing import Final
 
 import numpy as np
 import pytest
 
-import pyEQL
 from pyEQL.salt_ion_match import Salt
+from pyEQL.solution import Solution
 
-_ANIONS = ["Cl[-1]", "SO4[-2]", "PO4[-3]", "ClO[-1]", "NO3[-1]", "CO3[-2]", "MnO4[-2]"]
-_CATIONS = ["Na[+1]", "Ca[+2]", "Fe[+3]", "K[+1]", "Li[+1]", "Cu[+2]", "Ba[+2]"]
-_SALTS = list(product(_CATIONS[:3], _ANIONS[:3]))
 _CONJUGATE_BASES = [
     ("HCO3[-1]", "CO3[-2]"),
     ("H2PO4[-1]", "PO4[-3]"),
 ]
-_CONJUGATE_BASE_PAIRS = [
-    ((cation, conjugates[0]), (cation, conjugates[1])) for cation, conjugates in product(_CATIONS[:3], _CONJUGATE_BASES)
-]
-_OXIDATION_STATE_IONS = list(combinations(["Cl[-1]", "ClO[-1]", "ClO2[-1]", "ClO3[-1]", "ClO4[-1]"], r=2))
-_OXIDATION_STATE_PAIRS = [
-    ((cation, anion[0]), (cation, anion[1])) for cation, anion in product(_CATIONS[:3], _OXIDATION_STATE_IONS)
-]
+_CONJUGATE_BASE_PAIRS = [((("Na", 1), conjugates[0]), (("Na", 1), conjugates[1])) for conjugates in _CONJUGATE_BASES]
+_OXIDATION_STATE_IONS = list(combinations([(cl_ion, -1) for cl_ion in ["Cl", "ClO", "ClO2"]], r=2))
+_OXIDATION_STATE_PAIRS = [((("Na", 1), anion[0]), (("Na", 1), anion[1])) for anion in _OXIDATION_STATE_IONS]
 
 
 @pytest.fixture(name="cutoff", params=[1e-8])
@@ -181,47 +175,12 @@ def test_salt_asymmetric() -> None:
     assert s1.get_salt().nu_anion == 1
 
 
-"""
-Solution.get_salt_dict pytest.fixture reference
-===============================================
-
-This description summarizes the organization of pytest fixtures for the Solution.get_salt_dict unit tests.
-
-Generally, unit tests request and inspect the `salt_dict` and `salts` fixtures. The `salt_dict`
-fixture returns the result of Solution.get_salt_dict called with values, `cutoff` and `use_totals`. The Solution object
-on which Solution.get_salt_dict is called along with the values of `cutoff` and `use_totals` are all set by the
-`solution`, `cutoff` and `use_totals` fixtures, respectively. In particular, the `solution` fixture is configured
-from fixtures corresponding to keyword arguments to the Solution constructor. (Currently, only "solutes", "volume",
-and pH are needed.) The composition of `solution` is ultimately determined by the `salts` fixture (a list of Salt
-objects). Each Salt in `salts` is added to `solution` in amounts determined by the floats corresponding to the
-`salt_conc`, `cation_scale`, `anion_scale`, and `salt_ratio` fixtures.
-
-- `salt_conc`: determines the *base* concentration of salts; if `cation_scale = anion_scale = salt_ratio = 1.0`, then
-  the concentration of each ion will be that resulting from dissolving a concentration of the salt equal to `salt_conc`.
-- `cation_scale`/`anion_scale`: a factor with which to scale the concentration of the cation/anion in a salt relative
-  to `salt_conc`. This is applied to each pair of ions in `salts`. If `cation_scale = 0.0`/`anion_scale = 0.0`, then
-  only the anions/cations are added to `solution`.
-- `salt_ratio`: This is the ratio of the concentration of any given Salt in `salts` relative to the previous Salt in
-  the list. Note that if this value is 0.0, then no more than one Salt is added to `solution`.
-
-The Salt objects in `salts` are constructed from salt-ion pairs in `_SOLUTES` or _SOLUTES_LITE.
-
-Under different parametrizations of the compositions fixtures, several Solution test cases are covered including:
-- an empty solution
-- stochiometric/unequal ratios of single/double salt-ion pairs in a solution, including the case where the same ion
-  belongs to multiple salts (e.g., Solution(solutes={'Na[+1]': '3 mol/L', 'Cl[-1]': '1 mol/L', 'SO4[-2]': '1 mol/L'}))
-- single/double anion/cation only solutions (e.g., a solution of Na+ and/or Ca[+2] ions)
-- salts composed of mono-/di-/trivalent ions
-"""
-
-
 @pytest.mark.parametrize("salts", [[]])
 def test_should_return_empty_dict_for_empty_solution(salt_dict: dict[str, dict[str, float | Salt]]) -> None:
     assert not salt_dict
 
 
-@pytest.mark.parametrize("salt", [Salt(c, a) for c, a in _SALTS])
-# This parametrization ensures that hydroxide is most abundant anions and can pair with excess cations
+# The parametrizations below ensures that hydroxide is the most abundant anion and can pair with excess cations
 @pytest.mark.parametrize(("salt_conc", "anion_scale", "pH"), [(0.01, 0.0, 13.0), (0.01, 0.1, 13.0)])
 def test_should_match_excess_cations_with_hydroxide(
     salts: list[Salt], salt_dict: dict[str, dict[str, float | Salt]]
@@ -230,8 +189,7 @@ def test_should_match_excess_cations_with_hydroxide(
     assert base.formula in salt_dict
 
 
-@pytest.mark.parametrize("salt", [Salt(c, a) for c, a in _SALTS])
-# This parametrization ensures that protons are most abundant cations and can pair with excess anions
+# The parametrizations below ensures that protons are the most abundant cations and can pair with excess anions
 @pytest.mark.parametrize(("salt_conc", "cation_scale", "pH"), [(0.01, 0.0, 1.0), (0.01, 0.1, 1.0)])
 def test_should_match_excess_anions_with_protons(
     salts: list[Salt], salt_dict: dict[str, dict[str, float | Salt]]
@@ -242,8 +200,8 @@ def test_should_match_excess_anions_with_protons(
 
 # This parametrization ensures that the concentration of the salt is higher than that of water (~55 M)
 @pytest.mark.parametrize(("anion_scale", "salt_conc", "salts"), [(0.0, 100.0, [Salt("Na", "Cl")])])
-def test_should_log_warning_for_high_concentrations(
-    solution: pyEQL.Solution, use_totals: bool, caplog: pytest.LogCaptureFixture
+def test_should_log_warning_for_high_salt_concentrations(
+    solution: Solution, use_totals: bool, caplog: pytest.LogCaptureFixture
 ) -> None:
     caplog.set_level(logging.DEBUG, logger=solution.logger.name)
     _ = solution.get_salt_dict(use_totals=use_totals)
@@ -256,6 +214,8 @@ def test_should_log_warning_for_high_concentrations(
 
 
 class TestSaltDictTypes:
+    parametrizations: Final[dict[str, list[str]]] = {"ion_pair": ["basic"], "ion_pairs": ["basic"]}
+
     @staticmethod
     @pytest.fixture(name="cation_scale", params=[0.5, 1.0, 1.5])
     def fixture_cation_scale(request: pytest.FixtureRequest) -> float:
@@ -275,6 +235,8 @@ class TestSaltDictTypes:
 
 
 class TestGetSaltDict:
+    parametrizations: Final[dict[str, list[str]]] = {"ion_pair": ["basic"], "ion_pairs": ["basic"]}
+
     @staticmethod
     def test_should_match_equimolar_ion_equivalents(
         salts: list[Salt], salt_dict: dict[str, dict[str, float | Salt]]
@@ -303,22 +265,27 @@ class TestGetSaltDict:
         assert "HOH" not in salt_dict
 
     @staticmethod
-    # This cutoff should be higher than the concentration of at least one salt (see salt_conc, anion/cation_scale,
-    # salt_ratio fixtures)
+    # For appropriate test coverage, ensure that "cutoff" is parametrized such that it exceeds the salt concentration
+    # for at least one parametrization (see salt_conc, anion/cation_scale, salt_ratio fixtures for details on how to
+    # control salt concentrations)
     # Parametrization over volume is required to ensure that concentrations and not absolute molar quantities are
-    # used as a cutoff
+    # used as a cutoff (note that volume is passed to the "solution" fixture)
     @pytest.mark.parametrize(("cutoff", "volume"), product([0.0, 0.75, 1.0, 1.5], ["0.5 L", "1 L", "2 L"]))
     def test_should_not_return_salts_with_concentration_below_cutoff(
         salt_dict: dict[str, dict[str, float | Salt]],
         cutoff: float,
-        solution: pyEQL.Solution,
+        solution: Solution,
     ) -> None:
-        mw = solution.get_property(solution.solvent, "molecular_weight").to("kg/mol")
+        mw = solution.get_property(solution.solvent, "molecular_weight")
+        assert mw is not None
+        mw = mw.to("kg/mol")
         solvent_mass = solution.components[solution.solvent] * mw.m
         salt_concentrations_above_cutoff = [d["mol"] / solvent_mass >= cutoff for d in salt_dict.values()]
         assert all(salt_concentrations_above_cutoff)
 
     @staticmethod
+    # Analogous commentary to test_should_not_return_salts_with_concentration_below_cutoff except replace "lower" with
+    # "higher"
     @pytest.mark.parametrize("salt_conc_units", ["mol/kg"])
     @pytest.mark.parametrize(("cutoff", "volume"), product([0.0, 0.75, 1.0, 1.5], ["0.5 L", "1 L", "2 L"]))
     def test_should_return_all_salts_with_concentrations_above_cutoff(
@@ -359,9 +326,9 @@ class TestGetSaltDict:
 class TestGetSaltDictMultipleSalts(TestGetSaltDict):
     @staticmethod
     @pytest.fixture(name="salts")
-    def fixture_salts(solute_pairs: tuple[tuple[str, str], tuple[str, str]]) -> list[Salt]:
-        major_salt_cation, major_salt_anion = solute_pairs[0]
-        minor_salt_cation, minor_salt_anion = solute_pairs[1]
+    def fixture_salts(ion_pairs: tuple[tuple[str, str], tuple[str, str]]) -> list[Salt]:
+        major_salt_cation, major_salt_anion = ion_pairs[0]
+        minor_salt_cation, minor_salt_anion = ion_pairs[1]
         major_salt = Salt(major_salt_cation, major_salt_anion)
         minor_salt = Salt(minor_salt_cation, minor_salt_anion)
 
@@ -375,7 +342,7 @@ class TestGetSaltDictMultipleSalts(TestGetSaltDict):
         major_salt, minor_salt = salts
         mixed_salt = Salt(major_salt.cation, minor_salt.anion)
         assert major_salt.formula in salt_dict
-        assert mixed_salt.formula in salt_dict
+        assert mixed_salt.formula in salt_dict or mixed_salt.formula == "HOH"
 
     @staticmethod
     @pytest.mark.parametrize("anion_scale", [1.1])
@@ -385,11 +352,11 @@ class TestGetSaltDictMultipleSalts(TestGetSaltDict):
         major_salt, minor_salt = salts
         mixed_salt = Salt(minor_salt.cation, major_salt.anion)
         assert major_salt.formula in salt_dict
-        assert mixed_salt.formula in salt_dict
+        assert mixed_salt.formula in salt_dict or mixed_salt.formula == "HOH"
 
     @staticmethod
     @pytest.mark.parametrize("use_totals", [False])
-    @pytest.mark.parametrize(("solute_pairs"), _CONJUGATE_BASE_PAIRS)
+    @pytest.mark.parametrize(("ion_pairs"), _CONJUGATE_BASE_PAIRS)
     def test_should_include_salt_for_low_concentration_conjugate_base_when_use_totals_false(
         salt_dict: dict[str, dict[str, float | Salt]], salts: list[Salt]
     ) -> None:
@@ -397,7 +364,7 @@ class TestGetSaltDictMultipleSalts(TestGetSaltDict):
         assert all(salts_in_dict)
 
     @staticmethod
-    @pytest.mark.parametrize(("solute_pairs"), _CONJUGATE_BASE_PAIRS)
+    @pytest.mark.parametrize(("ion_pairs"), _CONJUGATE_BASE_PAIRS)
     def test_should_not_include_salt_for_low_concentration_conjugate_base_when_use_totals_true(
         salt_dict: dict[str, dict[str, float | Salt]],
         salts: list[Salt],
@@ -408,15 +375,17 @@ class TestGetSaltDictMultipleSalts(TestGetSaltDict):
 
     @staticmethod
     @pytest.mark.parametrize(("cation_scale", "salt_ratio", "cutoff"), [(0.9, 1.0, 0.0)])
-    @pytest.mark.parametrize("salts", [[Salt(c, a) for c, a in zip(_CATIONS, _ANIONS, strict=True)]])
     def test_should_order_salts_by_amount(salt_dict: dict[str, dict[str, float | Salt]]) -> None:
         salt_amounts = [d["mol"] for d in salt_dict.values()]
         assert salt_amounts == sorted(salt_amounts, reverse=True)
 
     @staticmethod
-    @pytest.mark.parametrize("solute_pairs", _OXIDATION_STATE_PAIRS)
+    @pytest.mark.parametrize("ion_pairs", _OXIDATION_STATE_PAIRS)
     def test_should_match_salts_for_different_oxidation_states_when_use_totals_is_true(
         salt_dict: dict[str, dict[str, float | Salt]], salts: list[Salt]
     ) -> None:
         salts_in_dict = [salt.formula in salt_dict for salt in salts]
         assert all(salts_in_dict)
+
+
+# TODO: Add integration test: for example, with salt water

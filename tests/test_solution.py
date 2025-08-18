@@ -10,7 +10,7 @@ import copy
 import logging
 import platform
 from importlib.resources import files
-from itertools import zip_longest
+from typing import Final
 
 import numpy as np
 import pytest
@@ -18,12 +18,11 @@ import yaml
 from monty.serialization import dumpfn, loadfn
 from pint import Quantity
 
-import pyEQL
 import pyEQL.activity_correction as ac
-from pyEQL import Solution, engines, ureg
+from pyEQL import engines, ureg
 from pyEQL.engines import IdealEOS, NativeEOS
 from pyEQL.salt_ion_match import Salt
-from pyEQL.solution import UNKNOWN_OXI_STATE
+from pyEQL.solution import UNKNOWN_OXI_STATE, Solution
 
 
 @pytest.fixture
@@ -791,65 +790,9 @@ def test_to_from_file(tmp_path):
         Solution.from_file(filename)
 
 
-"""
-The section below generates values to be used for test parametrization.
-"""
-
-_CATIONS = []
-_ANIONS = []
-
-for doc in pyEQL.IonDB.query(criteria={"size.molar_volume": {"$ne": None}}):
-    if doc["charge"] > 0:
-        _CATIONS.append(doc["formula"])
-    elif doc["charge"] < 0:
-        _ANIONS.append(doc["formula"])
-
-_fill_value = _CATIONS[0] if len(_CATIONS) < len(_ANIONS) else _ANIONS[0]
-# These cation-anion pairs include all ions for which molar volumes are available
-_SOLUTES = list(zip_longest(_CATIONS, _ANIONS, fillvalue=_fill_value))
-_FORMULAS_TO_SALTS = {f"{Salt(anion, cation).formula}(aq)": Salt(anion, cation) for anion, cation in _SOLUTES}
-_criteria = {
-    "model_parameters.molar_volume_pitzer.Beta0": {"$ne": None},
-    "charge": 0.0,
-    "formula": {"$in": list(_FORMULAS_TO_SALTS)},
-}
-# These salts include all salts for which Pitzer molar volume parameters are available
-_SALTS = [_FORMULAS_TO_SALTS[doc["formula"]] for doc in pyEQL.IonDB.query(criteria=_criteria)]
-
-
-@pytest.fixture(name="salt", params=_SOLUTES)
-def fixture_salt(request: pytest.FixtureRequest) -> Salt:
-    cation, anion = request.param
-    return Salt(cation=cation, anion=anion)
-
-
-def _get_solute_volume(
-    ionic_strength: float,
-    conc: Quantity,
-    alphas: tuple[float, float],
-    param: dict[str, dict[str, Quantity]],
-    salt: Salt,
-    temp: str,
-) -> float:
-    return ac.get_apparent_volume_pitzer(
-        ionic_strength,
-        conc,
-        alphas[0],
-        alphas[1],
-        ureg.Quantity(param["Beta0"]["value"]).magnitude,
-        ureg.Quantity(param["Beta1"]["value"]).magnitude,
-        ureg.Quantity(param["Beta2"]["value"]).magnitude,
-        ureg.Quantity(param["Cphi"]["value"]).magnitude,
-        ureg.Quantity(param["V_o"]["value"]).magnitude,
-        salt.z_cation,
-        salt.z_anion,
-        salt.nu_cation,
-        salt.nu_anion,
-        temp,
-    )
-
-
 class TestSolutionAdd:
+    parametrizations: Final[dict[str, list[str]]] = {"ion_pair": ["pitzer"]}
+
     @staticmethod
     @pytest.fixture(name="salt_conc", params=[0.0, 1.0, 2.0])
     def fixture_salt_conc(request: pytest.FixtureRequest) -> float:
@@ -897,13 +840,44 @@ class TestSolutionAdd:
 
 
 class TestZeroSoluteVolume:
+    parametrizations: Final[dict[str, list[str]]] = {"ion_pair": ["pitzer"]}
+
     @staticmethod
     @pytest.mark.parametrize("engine", ["ideal"])
     def test_should_return_zero_solute_volume_for_ideal_engine(solution: Solution) -> None:
-        assert solution._get_solute_volume() == 0.0
+        assert solution._get_solute_volume() == 0.0  # type: ignore[no-untyped-call]
 
 
 class TestLinearCombinationSoluteVolume:
+    parametrizations: Final[dict[str, list[str]]] = {"ion_pair": ["pitzer"]}
+
+    @staticmethod
+    @pytest.fixture(name="expected_solute_volume")
+    def fixture_expected_solute_volume(
+        ionic_strength: float,
+        conc: Quantity,
+        alphas: tuple[float, float],
+        param: dict[str, dict[str, Quantity]],
+        salt: Salt,
+        temp: str,
+    ) -> float:
+        return ac.get_apparent_volume_pitzer(  # type: ignore[no-any-return, no-untyped-call]
+            ionic_strength,
+            conc,
+            alphas[0],
+            alphas[1],
+            ureg.Quantity(param["Beta0"]["value"]).magnitude,
+            ureg.Quantity(param["Beta1"]["value"]).magnitude,
+            ureg.Quantity(param["Beta2"]["value"]).magnitude,
+            ureg.Quantity(param["Cphi"]["value"]).magnitude,
+            ureg.Quantity(param["V_o"]["value"]).magnitude,
+            salt.z_cation,
+            salt.z_anion,
+            salt.nu_cation,
+            salt.nu_anion,
+            temp,
+        )
+
     @staticmethod
     @pytest.mark.parametrize(("salt_conc", "salt_conc_units"), [(1e-11, "mol/kg")])
     def test_should_return_solute_volume_equal_to_linear_combination_of_molar_solute_volumes_for_dilute_solutions(
@@ -916,15 +890,14 @@ class TestLinearCombinationSoluteVolume:
                 molar_volume = solution.get_property(solute, "size.molar_volume")
                 sum_of_molar_volumes += ureg.Quantity(component, "mol") * molar_volume
 
-        assert solution._get_solute_volume().m == sum_of_molar_volumes.m
+        assert solution._get_solute_volume().m == sum_of_molar_volumes.m  # type: ignore[no-untyped-call]
 
     @staticmethod
-    @pytest.mark.parametrize("salt", _SALTS)
     def test_should_log_debug_message_when_using_pitzer_model(
         solution: Solution, salt: Salt, caplog: pytest.LogCaptureFixture
     ) -> None:
         caplog.set_level(logging.DEBUG, logger=solution.logger.name)
-        _ = solution._get_solute_volume()
+        _ = solution._get_solute_volume()  # type: ignore[no-untyped-call]
         expected_record = (
             engines.logger.name,
             logging.DEBUG,
@@ -933,27 +906,13 @@ class TestLinearCombinationSoluteVolume:
         assert expected_record in caplog.record_tuples
 
     @staticmethod
-    @pytest.mark.parametrize("salt", _SALTS)
     @pytest.mark.parametrize("salt_conc_units", ["mol/kg"])
     def test_should_use_major_salt_molar_volume_to_calculate_solute_volume_when_parameters_exist(
-        solution: Solution, salt: Salt, salt_conc: float, salt_conc_units: str, alphas: tuple[float, float], volume: str
+        solution: Solution,
+        salt: Salt,
+        expected_solute_volume: Quantity,
     ) -> None:
-        param = solution.get_property(salt.formula, "model_parameters.molar_volume_pitzer")
-        conc = ureg.Quantity(salt_conc, salt_conc_units)
-        molality = (1 / 2) * (salt.nu_cation + salt.nu_anion) * conc
-        expected_solute_volume = (
-            _get_solute_volume(
-                solution.ionic_strength,
-                molality,
-                alphas,
-                param,
-                salt,
-                str(solution.temperature),
-            )
-            * conc
-            * solution.solvent_mass
-        ).to("L")
-        solute_volume_without_protons_and_hydroxide = solution._get_solute_volume().to("L")
+        solute_volume_without_protons_and_hydroxide = solution._get_solute_volume().to("L")  # type: ignore[no-untyped-call]
 
         if salt.cation != "H[+1]":
             solute_volume_without_protons_and_hydroxide -= solution.get_amount("H+", "mol") * solution.get_property(

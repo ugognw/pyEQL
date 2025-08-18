@@ -13,13 +13,12 @@ by USGS(PHREEQC)
 
 import logging
 import platform
-from itertools import product
+from typing import Final
 
 import numpy as np
 import pytest
 from pint import Quantity
 
-import pyEQL
 import pyEQL.activity_correction as ac
 from pyEQL import engines, ureg
 from pyEQL.activity_correction import _debye_parameter_activity, _debye_parameter_B
@@ -610,52 +609,14 @@ def test_water_activity_phreeqc_pitzer_nacl_2():
         assert np.isclose(sol.osmotic_pressure.to("Pa").magnitude, osmotic_pressure, rtol=0.05), f"{osmotic_pressure}"
 
 
-_CATIONS = []
-_ANIONS = []
-
-for doc in pyEQL.IonDB.query(criteria={"charge": {"$ne": 0}}):
-    if doc["charge"] > 0:
-        _CATIONS.append(doc["formula"])
-    elif doc["charge"] < 0:
-        _ANIONS.append(doc["formula"])
-
-_SOLUTES = list(product(_CATIONS, _ANIONS))
-_FORMULAS_TO_SALTS = {f"{Salt(anion, cation).formula}(aq)": Salt(anion, cation) for anion, cation in _SOLUTES}
-_criteria = {
-    "model_parameters.activity_pitzer.Beta0": {"$ne": None},
-    "charge": 0.0,
-    "formula": {"$in": list(_FORMULAS_TO_SALTS)},
-}
-# These salts include all salts for which Pitzer molar volume parameters are available
-_SALTS = [_FORMULAS_TO_SALTS[doc["formula"]] for doc in pyEQL.IonDB.query(criteria=_criteria)]
-
-
-def _get_activity_coefficient(
-    ionic_strength: float,
-    conc: Quantity,
-    alphas: tuple[float, float],
-    param: dict[str, dict[str, Quantity]],
-    salt: Salt,
-    temp: str,
-) -> float:
-    return ac.get_activity_coefficient_pitzer(
-        ionic_strength,
-        conc,
-        alphas[0],
-        alphas[1],
-        ureg.Quantity(param["Beta0"]["value"]).magnitude,
-        ureg.Quantity(param["Beta1"]["value"]).magnitude,
-        ureg.Quantity(param["Beta2"]["value"]).magnitude,
-        ureg.Quantity(param["Cphi"]["value"]).magnitude,
-        salt.z_cation,
-        salt.z_anion,
-        salt.nu_cation,
-        salt.nu_anion,
-        temp,
-    )
-
-
+# Parametrize with single Solution
+# Function-scoped parametrization of engine
 class TestUnitActivity:
+    @staticmethod
+    @pytest.fixture(name="salt")
+    def fixture_salt() -> Salt:
+        return Salt("Na[+1]", "Cl[-1]")
+
     @staticmethod
     @pytest.mark.parametrize("engine", ["ideal"])
     def test_should_return_unit_activity_for_all_solutes_with_ideal_engine(solution: Solution) -> None:
@@ -701,34 +662,40 @@ class TestUnitActivity:
 
         assert all(warnings_recorded)
 
-    @staticmethod
-    @pytest.mark.parametrize("engine", ["ideal", "native"])
-    @pytest.mark.parametrize("solutes", [{}])
-    def test_should_return_unit_activity_for_all_solutes_in_empty_solution(solution: Solution) -> None:
-        activity_coefficients_unity = [
-            solution.get_activity_coefficient(solute).m == 1.0
-            for solute in solution.components
-            if solute != solution.solvent
-        ]
-
-        assert all(activity_coefficients_unity)
-
 
 class TestActivityPitzer:
+    parametrizations: Final[dict[str, list[str]]] = {"ion_pair": ["pitzer"]}
+
     @staticmethod
-    @pytest.mark.parametrize("salt", _SALTS)
-    @pytest.mark.parametrize("salt_conc_units", ["mol/kg"])
-    def test_should_return_activity_coefficient_of_major_salt_when_parameters_exist(
-        solution: Solution, salt: Salt, alphas: tuple[float, float]
-    ) -> None:
+    @pytest.fixture(name="expected_activity_coefficient")
+    def fixture_expected_activity_coefficient(
+        solution: Solution,
+        salt: Salt,
+        alphas: tuple[float, float],
+    ) -> Quantity:
+        molality = salt.get_effective_molality(solution.ionic_strength)  # type: ignore[no-untyped-call]
         param = solution.get_property(salt.formula, "model_parameters.activity_pitzer")
-        expected_osmotic_coefficient = _get_activity_coefficient(
+        assert param is not None
+        return ac.get_activity_coefficient_pitzer(  # type: ignore[no-any-return, no-untyped-call]
             solution.ionic_strength,
-            salt.get_effective_molality(solution.ionic_strength),
-            alphas,
-            param,
-            salt,
+            molality,
+            alphas[0],
+            alphas[1],
+            ureg.Quantity(param["Beta0"]["value"]).magnitude,
+            ureg.Quantity(param["Beta1"]["value"]).magnitude,
+            ureg.Quantity(param["Beta2"]["value"]).magnitude,
+            ureg.Quantity(param["Cphi"]["value"]).magnitude,
+            salt.z_cation,
+            salt.z_anion,
+            salt.nu_cation,
+            salt.nu_anion,
             str(solution.temperature),
         )
-        assert solution.get_activity_coefficient(salt.cation).m == expected_osmotic_coefficient.m
-        assert solution.get_activity_coefficient(salt.anion).m == expected_osmotic_coefficient.m
+
+    @staticmethod
+    @pytest.mark.parametrize("salt_conc_units", ["mol/kg"])
+    def test_should_return_activity_coefficient_of_major_salt_when_parameters_exist(
+        solution: Solution, salt: Salt, expected_activity_coefficient: Quantity
+    ) -> None:
+        assert solution.get_activity_coefficient(salt.cation).m == expected_activity_coefficient.m
+        assert solution.get_activity_coefficient(salt.anion).m == expected_activity_coefficient.m

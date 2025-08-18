@@ -61,7 +61,7 @@ def create_pitzer_salts() -> list[_IonPair]:
     return [
         # One pair for each combination of mono/di/trivalent ions (data permitting)
         (("Na", 1.0), ("Cl", -1.0)),
-        (("Co", 2.0), ("Cl", -1.0)),
+        (("Mg", 2.0), ("Cl", -1.0)),
         (("Fe", 3.0), ("Cl", -1.0)),
         (("K", 1.0), ("SO4", -2.0)),
         (("Cu", 2.0), ("SO4", -2.0)),

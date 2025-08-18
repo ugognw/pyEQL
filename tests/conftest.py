@@ -142,8 +142,8 @@ def fixture_solutes(
     salt_ratio: float,
     salt_conc_units: str,
 ) -> dict[str, str]:
-    solute_values = {salt.anion: 0 for salt in salts}
-    solute_values.update({salt.cation: 0 for salt in salts})
+    solute_values = {salt.anion: 0.0 for salt in salts}
+    solute_values.update({salt.cation: 0.0 for salt in salts})
 
     for i, salt in enumerate(salts):
         # Scale salt component concentrations
@@ -195,17 +195,15 @@ def fixture_solution(
     solutes: dict[str, str],
     volume: str,
     pH: float,
-    solvent: str | list,
+    solvent: str | list[Any],
     engine: EOS | Literal["native", "ideal", "phreeqc"],
     database: str | None,
 ) -> Solution:
     return Solution(solutes=solutes, volume=volume, pH=pH, solvent=solvent, engine=engine, database=database)
 
 
-# Model Parameters
-
-
-# Pitzer activity/osmotic parameters
+# Parameter rules for Pitzer activity/osmotic coefficients
+# see May, et al. (doi:10.1021/je2009329)
 @pytest.fixture(name="alphas")
 def fixture_alphas(ion_pair: _IonPair) -> tuple[float, float]:
     cation, anion = ion_pair

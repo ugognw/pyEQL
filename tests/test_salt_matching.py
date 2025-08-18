@@ -37,142 +37,59 @@ def fixture_use_totals(request: pytest.FixtureRequest) -> bool:
 
 
 @pytest.fixture(name="salt_dict")
-def fixture_salt_dict(solution: pyEQL.Solution, cutoff: float, use_totals: bool) -> dict[str, dict[str, float | Salt]]:
-    salt_dict: dict[str, dict[str, float | Salt]] = solution.get_salt_dict(cutoff=cutoff, use_totals=use_totals)
-    return salt_dict
+def fixture_salt_dict(solution: Solution, cutoff: float, use_totals: bool) -> dict[str, dict[str, float | Salt]]:
+    return solution.get_salt_dict(cutoff=cutoff, use_totals=use_totals)
 
 
-def test_salt_init() -> None:
-    s = Salt("Na[+1]", "Cl[-1]")
-    assert s.formula == "NaCl"
-    assert s.cation == "Na[+1]"
-    assert s.anion == "Cl[-1]"
-    assert s.nu_anion == 1
-    assert s.nu_cation == 1
-    assert s.z_cation == 1
-    assert s.z_anion == -1
-
-    s = Salt("Fe+3", "OH-1")
-    assert s.formula == "Fe(OH)3"
-    assert s.cation == "Fe[+3]"
-    assert s.anion == "OH[-1]"
-    assert s.nu_anion == 3
-    assert s.nu_cation == 1
-    assert s.z_cation == 3
-    assert s.z_anion == -1
+@pytest.fixture(name="expected_cation_nu")
+def fixture_expected_cation_nu(cation: tuple[str, int], anion: tuple[str, int]) -> int:
+    return 1 if cation[1] == anion[1] else -anion[1]
 
 
-def test_single_salt_mono() -> None:
-    """
-    test matching a solution with a single monovalent salt
-    """
-    s1 = pyEQL.Solution([["Na+", "2 mol/L"], ["Cl-", "2 mol/L"]])
-    assert isinstance(s1.get_salt(), pyEQL.salt_ion_match.Salt)
-    assert s1.get_salt().formula == "NaCl"
-    assert s1.get_salt().cation == "Na[+1]"
-    assert s1.get_salt().anion == "Cl[-1]"
-    assert s1.get_salt().nu_cation == 1
-    assert s1.get_salt().nu_anion == 1
+@pytest.fixture(name="expected_anion_nu")
+def fixture_expected_anion_nu(cation: tuple[str, int], anion: tuple[str, int]) -> int:
+    return 1 if anion[1] == cation[1] else cation[1]
 
 
-def test_single_salt_di() -> None:
-    """
-    test matching a solution with a single divalent salt
-    """
-    s1 = pyEQL.Solution([["Na+", "4 mol/L"], ["SO4-2", "2 mol/L"]])
-    assert isinstance(s1.get_salt(), pyEQL.salt_ion_match.Salt)
-    assert s1.get_salt().formula == "Na2SO4"
-    assert s1.get_salt().cation == "Na[+1]"
-    assert s1.get_salt().anion == "SO4[-2]"
-    assert s1.get_salt().nu_cation == 2
-    assert s1.get_salt().nu_anion == 1
+@pytest.fixture(name="expected_formula")
+def fixture_expected_formula(
+    cation: tuple[str, int], expected_cation_nu: int, anion: tuple[str, int], expected_anion_nu: int
+) -> str:
+    cation_part = cation[0] if expected_cation_nu == 1 else f"({cation}){expected_cation_nu}"
+    anion_part = anion[0] if expected_anion_nu == 1 else f"({anion}){expected_anion_nu}"
+    return cation_part + anion_part
 
 
-def test_single_salt_tri() -> None:
-    """
-    test matching a solution with a single trivalent salt
-    """
-    s1 = pyEQL.Solution([["Fe+3", "1 mol/L"], ["Cl-", "3 mol/L"]])
-    assert isinstance(s1.get_salt(), pyEQL.salt_ion_match.Salt)
-    assert s1.get_salt().formula == "FeCl3"
-    assert s1.get_salt().cation == "Fe[+3]"
-    assert s1.get_salt().anion == "Cl[-1]"
-    assert s1.get_salt().nu_cation == 1
-    assert s1.get_salt().nu_anion == 3
+class TestSaltInit:
+    salt_parametrization: Final[list[str]] = ["basic"]
 
+    @staticmethod
+    def test_should_construct_formula(salt: Salt, expected_formula: str) -> None:
+        assert salt.formula == expected_formula
 
-def test_single_salt_di_tri() -> None:
-    """
-    test matching a solution with a divalent cation and trivalent anion
-    """
-    s1 = pyEQL.Solution([["Ca+2", "3 mol/L"], ["PO4-3", "2 mol/L"]])
-    assert isinstance(s1.get_salt(), pyEQL.salt_ion_match.Salt)
-    assert s1.get_salt().formula == "Ca3(PO4)2"
-    assert s1.get_salt().cation == "Ca[+2]"
-    assert s1.get_salt().anion == "PO4[-3]"
-    assert s1.get_salt().nu_cation == 3
-    assert s1.get_salt().nu_anion == 2
+    @staticmethod
+    def test_should_detect_cation(salt: Salt, cation: tuple[str, int]) -> None:
+        assert cation in salt.cation
 
+    @staticmethod
+    def test_should_detect_anion(salt: Salt, anion: tuple[str, int]) -> None:
+        assert anion in salt.anion
 
-def test_single_salt_tri_di() -> None:
-    """
-    test matching a solution with a trivalent cation and divalent anion
-    """
-    s1 = pyEQL.Solution([["Fe+3", "2 mol/L"], ["SO4[-2]", "3 mol/L"]])
-    assert isinstance(s1.get_salt(), pyEQL.salt_ion_match.Salt)
-    assert s1.get_salt().formula == "Fe2(SO4)3"
-    assert s1.get_salt().cation == "Fe[+3]"
-    assert s1.get_salt().anion == "SO4[-2]"
-    assert s1.get_salt().nu_cation == 2
-    assert s1.get_salt().nu_anion == 3
+    @staticmethod
+    def test_should_detect_cation_charge(salt: Salt, cation: tuple[str, int]) -> None:
+        assert salt.z_cation == cation[1]
 
+    @staticmethod
+    def test_should_detect_anion_charge(salt: Salt, anion: tuple[str, int]) -> None:
+        assert salt.z_cation == anion[1]
 
-def test_single_ion() -> None:
-    """
-    test matching a solution containing only a single ion
-    """
-    # Must set pH to meet default cutoff concentration in Solution.get_salt
-    s1 = pyEQL.Solution(solutes={"Fe+3": "1 mol/L"}, pH=14)
-    assert isinstance(s1.get_salt(), pyEQL.salt_ion_match.Salt)
-    assert s1.get_salt().formula == "Fe(OH)3"
-    assert s1.get_salt().cation == "Fe[+3]"
-    assert s1.get_salt().anion == "OH[-1]"
-    assert s1.get_salt().nu_cation == 1
-    assert s1.get_salt().nu_anion == 3
+    @staticmethod
+    def test_should_compute_stoichiometric_coefficient_for_cation(salt: Salt, expected_cation_nu: int) -> None:
+        assert salt.nu_cation == expected_cation_nu
 
-
-@pytest.mark.skipif(platform.machine() == "arm64" and platform.system() == "Darwin", reason="arm64 not supported")
-def test_salt_with_equilibration() -> None:
-    """
-    test matching a solution containing a salt, before and after equilibration.
-    Due to speciation changes, the concentration of the salt will decrease unless
-    get_salt_dict() uses total concentrations
-    """
-    s1 = pyEQL.Solution({"Mg+2": "1 mol/L", "Cl-": "2 mol/L"})
-    assert isinstance(s1.get_salt(), pyEQL.salt_ion_match.Salt)
-    assert s1.get_salt().formula == "MgCl2"
-    assert s1.get_salt().cation == "Mg[+2]"
-    assert s1.get_salt().anion == "Cl[-1]"
-    assert s1.get_salt().nu_cation == 1
-    assert s1.get_salt().nu_anion == 2
-    assert np.isclose(s1.get_salt_dict(cutoff=0.0)["MgCl2"]["mol"], 1)
-    s1.equilibrate()
-    assert s1.get_salt().formula == "MgCl2"
-    assert np.isclose(s1.get_salt_dict(cutoff=0.0)["MgCl2"]["mol"], 1)
-
-
-def test_salt_asymmetric() -> None:
-    """
-    test matching a solution where the cation and anion concentrations
-    are not equal
-    """
-    s1 = pyEQL.Solution([["Na+", "1 mol/kg"], ["Cl-", "4 mol/kg"]])
-    assert isinstance(s1.get_salt(), pyEQL.salt_ion_match.Salt)
-    assert s1.get_salt().formula == "NaCl"
-    assert s1.get_salt().cation == "Na[+1]"
-    assert s1.get_salt().anion == "Cl[-1]"
-    assert s1.get_salt().nu_cation == 1
-    assert s1.get_salt().nu_anion == 1
+    @staticmethod
+    def test_should_compute_stoichiometric_coefficient_for_anion(salt: Salt, expected_anion_nu: int) -> None:
+        assert salt.nu_anion == expected_anion_nu
 
 
 @pytest.mark.parametrize("salts", [[]])
@@ -321,6 +238,18 @@ class TestGetSaltDict:
             salts_have_correct_concentrations.append(np.isclose(calculated, expected, atol=1e-16))
 
         assert all(salts_have_correct_concentrations)
+
+    @staticmethod
+    @pytest.mark.skipif(platform.machine() == "arm64" and platform.system() == "Darwin", reason="arm64 not supported")
+    def test_should_return_equilibration_independent_salt_concentrations(
+        salt_dict: dict[str, dict[str, float | Salt]], solution: Solution
+    ) -> None:
+        solution.equilibrate()
+        new_salt_dict = solution.get_salt_dict(cutoff=0.0, use_totals=True)
+        salt_concentrations_unchanged = []
+        for salt, d in salt_dict.items():
+            salt_concentrations_unchanged.append(d["mol"] == new_salt_dict[salt]["mol"])
+        assert all(salt_concentrations_unchanged)
 
 
 class TestGetSaltDictMultipleSalts(TestGetSaltDict):

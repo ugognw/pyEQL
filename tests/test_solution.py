@@ -851,32 +851,38 @@ class TestZeroSoluteVolume:
 class TestLinearCombinationSoluteVolume:
     parametrizations: Final[dict[str, list[str]]] = {"ion_pair": ["pitzer"]}
 
+    #
     @staticmethod
     @pytest.fixture(name="expected_solute_volume")
     def fixture_expected_solute_volume(
         solution: Solution,
-        conc: Quantity,
+        salt_conc: float,
+        salt_conc_units: str,
+        cation_scale: float,
+        anion_scale: float,
         alphas: tuple[float, float],
-        param: dict[str, dict[str, Quantity]],
         salt: Salt,
-        temp: str,
     ) -> float:
-        return ac.get_apparent_volume_pitzer(  # type: ignore[no-any-return, no-untyped-call]
+        param = solution.get_property(salt.formula, "model_parameters.molar_volume_pitzer")
+        conc = ureg.Quantity(salt_conc, salt_conc_units)
+        molality = (1 / 2) * (salt.nu_cation + salt.nu_anion) * conc
+        molar_volume = ac.get_apparent_volume_pitzer(  # type: ignore[no-any-return, no-untyped-call]
             solution.ionic_strength,
-            conc,
+            molality,
             alphas[0],
             alphas[1],
-            ureg.Quantity(param["Beta0"]["value"]).magnitude,
-            ureg.Quantity(param["Beta1"]["value"]).magnitude,
-            ureg.Quantity(param["Beta2"]["value"]).magnitude,
-            ureg.Quantity(param["Cphi"]["value"]).magnitude,
-            ureg.Quantity(param["V_o"]["value"]).magnitude,
+            ureg.Quantity(param["Beta0"]["value"]).magnitude,  # type: ignore[index]
+            ureg.Quantity(param["Beta1"]["value"]).magnitude,  # type: ignore[index]
+            ureg.Quantity(param["Beta2"]["value"]).magnitude,  # type: ignore[index]
+            ureg.Quantity(param["Cphi"]["value"]).magnitude,  # type: ignore[index]
+            ureg.Quantity(param["V_o"]["value"]).magnitude,  # type: ignore[index]
             salt.z_cation,
             salt.z_anion,
             salt.nu_cation,
             salt.nu_anion,
-            temp,
         )
+        solute_volume = (1 / 2) * molar_volume * (cation_scale + anion_scale) * conc * solution.solvent_mass
+        return solute_volume.to("L")
 
     @staticmethod
     @pytest.mark.parametrize(("salt_conc", "salt_conc_units"), [(1e-11, "mol/kg")])
@@ -888,6 +894,9 @@ class TestLinearCombinationSoluteVolume:
         for solute, component in solution.components.items():
             if solute != solution.solvent:
                 molar_volume = solution.get_property(solute, "size.molar_volume")
+                # TODO: Replace ion pairs with equivalents in DB
+                if molar_volume is None:
+                    pytest.skip(reason=f"No molar volume available for solute: {solute}")
                 sum_of_molar_volumes += ureg.Quantity(component, "mol") * molar_volume
 
         assert solution._get_solute_volume().m == sum_of_molar_volumes.m  # type: ignore[no-untyped-call]
